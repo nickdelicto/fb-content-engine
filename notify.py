@@ -10,9 +10,14 @@ import pathlib
 import smtplib
 import ssl
 from email.message import EmailMessage
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from dotenv import load_dotenv
+
+# All "today"/"daily" references use Eastern Time so the 8pm ET cron sends a
+# summary for the ET calendar day (not UTC's day). Server can be in any TZ.
+REPORT_TZ = ZoneInfo("America/New_York")
 
 ROOT = pathlib.Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
@@ -84,9 +89,10 @@ def send_failure_alert(stage: str, error_text: str, niche: str = "", extra_conte
 
 def send_daily_cost_summary(date_iso: str = None) -> None:
     """Reads cost_log.csv, filters for the given date, emails a breakdown.
-    If date_iso is None, uses today's date in the server's local timezone."""
+    If date_iso is None, uses today's date in Eastern Time (so the 8pm ET cron
+    correctly captures the ET calendar day, not UTC's day)."""
     if date_iso is None:
-        date_iso = datetime.date.today().isoformat()
+        date_iso = datetime.datetime.now(REPORT_TZ).date().isoformat()
 
     log_path = ROOT / "cost_log.csv"
     if not log_path.exists():
