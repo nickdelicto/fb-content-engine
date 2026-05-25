@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+  <title>{% block title %}fb-content-engine admin{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="data:,">
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .brand-cream { background-color: #F5EFE0; }
+    .brand-sage { color: #87A878; }
+    .brand-slate { color: #3A4451; }
+    .brand-gold { color: #C4A86B; }
+  </style>
+</head>
+<body class="brand-cream min-h-screen">
+  {% if session.get('user_email') %}
+  <header class="bg-white border-b border-gray-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="text-xl font-semibold brand-slate">fb-content-engine</span>
+        <span class="text-xs text-gray-500">admin</span>
+      </div>
+      <div class="flex items-center gap-3 text-sm">
+        {% if session.get('user_picture') %}
+          <img src="{{ session.user_picture }}" alt="" class="w-7 h-7 rounded-full">
+        {% endif %}
+        <span class="text-gray-600">{{ session.user_email }}</span>
+        <a href="{{ url_for('logout') }}" class="text-gray-400 hover:text-gray-600 underline">Sign out</a>
+      </div>
+    </div>
+  </header>
+  {% endif %}
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

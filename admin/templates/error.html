@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — fb-content-engine{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto mt-16 bg-white rounded-lg shadow-md p-8 text-center">
+  <h1 class="text-xl font-semibold brand-slate mb-3">{{ title }}</h1>
+  <p class="text-sm text-gray-600 mb-6">{{ message }}</p>
+  <a href="{{ url_for('login') }}" class="text-sm brand-sage hover:underline">Back to sign in</a>
+</div>
+{% endblock %}

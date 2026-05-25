@@ -6,3 +6,6 @@ __pycache__/
 niches/*/out/
 niches/*/state.json
 niches/*/cache/
+admin/admin.db
+admin/admin.db-journal
+admin/__pycache__/
