@@ -4,37 +4,90 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
-  <title>{% block title %}fb-content-engine admin{% endblock %}</title>
+  <title>{% block title %}fb-content-engine{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" href="data:,">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+          },
+          colors: {
+            cream:    '#F5EFE0',
+            'cream-2':'#FAF6EC',
+            sage:     '#87A878',
+            'sage-light': '#A8C09B',
+            gold:     '#C4A86B',
+            slate:    '#3A4451',
+            'slate-2':'#5A6472',
+            'warm-200':'#E8E0CD',
+            'warm-300':'#D6CDB8',
+          },
+          animation: {
+            fadeIn: 'fadeIn 0.3s ease-out',
+            slideUp: 'slideUp 0.4s ease-out',
+          },
+          keyframes: {
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(8px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+          },
+          boxShadow: {
+            'soft':   '0 1px 3px rgba(58,68,81,0.06), 0 1px 2px rgba(58,68,81,0.04)',
+            'card':   '0 4px 12px rgba(58,68,81,0.06), 0 1px 3px rgba(58,68,81,0.04)',
+            'lifted': '0 10px 25px rgba(58,68,81,0.08), 0 4px 10px rgba(58,68,81,0.04)',
+          },
+        },
+      },
+    }
+  </script>
   <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .brand-cream { background-color: #F5EFE0; }
-    .brand-sage { color: #87A878; }
-    .brand-slate { color: #3A4451; }
-    .brand-gold { color: #C4A86B; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(to bottom, #FAF6EC 0%, #F5EFE0 100%);
+      min-height: 100vh;
+      color: #3A4451;
+    }
+    .font-editorial { font-family: 'Source Serif 4', Georgia, serif; }
   </style>
 </head>
-<body class="brand-cream min-h-screen">
+<body class="pb-16 md:pb-0">
   {% if session.get('user_email') %}
-  <header class="bg-white border-b border-gray-200 shadow-sm">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <span class="text-xl font-semibold brand-slate">fb-content-engine</span>
-        <span class="text-xs text-gray-500">admin</span>
+  <header class="border-b border-warm-200 bg-cream-2/80 backdrop-blur-sm sticky top-0 z-40">
+    <div class="max-w-5xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-lg bg-sage/15 flex items-center justify-center shrink-0">
+          <span class="font-editorial font-semibold text-sage text-base">fb</span>
+        </div>
+        <div class="min-w-0">
+          <div class="font-editorial text-base font-semibold text-slate leading-tight truncate">fb-content-engine</div>
+          <div class="text-[10px] text-slate-2 uppercase tracking-[0.12em] mt-0.5">admin</div>
+        </div>
       </div>
-      <div class="flex items-center gap-3 text-sm">
+      <div class="flex items-center gap-3 shrink-0">
         {% if session.get('user_picture') %}
-          <img src="{{ session.user_picture }}" alt="" class="w-7 h-7 rounded-full">
+          <img src="{{ session.user_picture }}" alt="" class="w-7 h-7 rounded-full ring-1 ring-warm-300">
+        {% else %}
+          <div class="w-7 h-7 rounded-full bg-sage/15 flex items-center justify-center text-sage text-xs font-semibold">
+            {{ session.user_email[0]|upper }}
+          </div>
         {% endif %}
-        <span class="text-gray-600">{{ session.user_email }}</span>
-        <a href="{{ url_for('logout') }}" class="text-gray-400 hover:text-gray-600 underline">Sign out</a>
+        <span class="hidden sm:inline text-xs text-slate-2 truncate max-w-[180px]">{{ session.user_email }}</span>
+        <a href="{{ url_for('logout') }}" class="text-xs text-slate-2 hover:text-slate transition-colors">Sign out</a>
       </div>
     </div>
   </header>
   {% endif %}
 
-  <main class="max-w-6xl mx-auto px-4 py-8">
+  <main class="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-10">
     {% block content %}{% endblock %}
   </main>
 </body>

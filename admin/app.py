@@ -7,8 +7,8 @@ Dashboard: shows today's posts (= the batch generated yesterday for today's
 publish date), with copy-to-clipboard buttons + mark-as-posted tracking
 persisted in SQLite.
 
-Run locally:
-    .venv/bin/python admin/app.py
+Run locally (from project root):
+    .venv/bin/python -m admin.app
 
 Run in production (VPS):
     .venv/bin/gunicorn -w 2 -b 127.0.0.1:5001 admin.app:app
@@ -22,7 +22,10 @@ from functools import wraps
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 from flask import (Flask, abort, g, jsonify, redirect, render_template,
-                   request, session, url_for)
+                   request, send_from_directory, session, url_for)
+
+from admin import posts as posts_lib
+from admin import status as status_lib
 
 # --- Setup ---
 ROOT = pathlib.Path(__file__).resolve().parent.parent  # fb-content-engine/
@@ -116,8 +119,60 @@ def security_headers(resp):
 @app.route("/")
 @login_required
 def dashboard():
-    # Stub — Chunk 2 will fill this in
-    return render_template("dashboard.html", user=session["user_email"], posts=[])
+    # Default to the first niche (only one for now). Future: niche switcher.
+    niches = posts_lib.list_niches(ROOT)
+    if not niches:
+        return render_template("dashboard.html",
+                               user=session["user_email"],
+                               today_date=posts_lib.today_iso(),
+                               tomorrow_date=posts_lib.tomorrow_iso(),
+                               today_posts=[],
+                               tomorrow_posts=[],
+                               niche=None)
+    niche = niches[0]
+    today = posts_lib.today_iso()
+    tomorrow = posts_lib.tomorrow_iso()
+    conn = get_db()
+    today_status = status_lib.get_status_lookup(conn, niche, today)
+    tomorrow_status = status_lib.get_status_lookup(conn, niche, tomorrow)
+    today_posts = posts_lib.load_posts(ROOT, niche, today, today_status)
+    tomorrow_posts = posts_lib.load_posts(ROOT, niche, tomorrow, tomorrow_status)
+    return render_template("dashboard.html",
+                           user=session["user_email"],
+                           today_date=today,
+                           tomorrow_date=tomorrow,
+                           today_posts=today_posts,
+                           tomorrow_posts=tomorrow_posts,
+                           niche=niche)
+
+
+@app.route("/image/<niche>/<target_date>/<filename>")
+@login_required
+def serve_image(niche, target_date, filename):
+    # Path traversal defense: validate components don't contain ".."
+    for part in (niche, target_date, filename):
+        if ".." in part or "/" in part:
+            abort(400)
+    img_dir = ROOT / "niches" / niche / "out" / target_date / "images"
+    return send_from_directory(img_dir, filename)
+
+
+@app.route("/mark-posted", methods=["POST"])
+@login_required
+def mark_posted():
+    data = request.get_json() or request.form
+    niche = data.get("niche")
+    target_date = data.get("target_date")
+    post_id = data.get("post_id")
+    action = data.get("action", "mark")  # "mark" or "unmark"
+    if not all([niche, target_date, post_id]):
+        return jsonify({"ok": False, "error": "missing fields"}), 400
+    conn = get_db()
+    if action == "unmark":
+        status_lib.unmark_posted(conn, niche, target_date, post_id)
+        return jsonify({"ok": True, "action": "unmarked"})
+    status_lib.mark_posted(conn, niche, target_date, post_id, session["user_email"])
+    return jsonify({"ok": True, "action": "marked", "posted_by": session["user_email"]})
 
 
 @app.route("/login")
@@ -155,6 +210,19 @@ def auth_callback():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/dev-login")
+def dev_login():
+    """Local-only bypass for testing without Google OAuth. Disabled in production."""
+    if not app.debug:
+        abort(404)
+    # Use the first allowlisted email as the test identity
+    test_email = next(iter(ALLOWED_EMAILS), "dev@local")
+    session["user_email"] = test_email
+    session["user_name"] = "Dev User"
+    session["user_picture"] = ""
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/robots.txt")
