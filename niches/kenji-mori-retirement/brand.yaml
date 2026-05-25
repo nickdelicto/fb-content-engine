@@ -1,0 +1,79 @@
+page:
+  name: Kenji Mori
+  url: https://facebook.com/kenjimori  # CONFIRM exact URL with owner
+  niche: US personal finance for the 35-65 "real responsibilities" years (debt, mortgage, kids, taxes, scams, retirement planning)
+  audience_age: 35-65
+  primary_language: en-US
+
+voice:
+  primary: plainspoken_guide
+  secondary: frank_insider
+  secondary_frequency: 0.25
+  jargon_policy: define_on_first_use
+  banned_phrases:
+    - "guaranteed return"
+    - "you'll earn"
+    - "make money fast"
+    - "limited time offer"
+    - "this one weird trick"
+  banned_content:
+    - specific stock tickers
+    - specific annuity or insurance product names
+    - personalized financial advice framing ("you should buy/sell/claim")
+    - false or outdated facts about SS, Medicare, tax law
+    - em dash punctuation (use periods, commas, or shorter sentences instead — never the long-dash character)
+
+visual:
+  palette:
+    sage: "#87A878"
+    cream: "#F5EFE0"
+    muted_gold: "#C4A86B"
+    slate: "#3A4451"
+  typography:
+    family: editorial_serif
+    style: NYT/Cheltenham-style serif, magazine-byline authority, distinctive (NOT generic AI sans-serif which is the default look)
+    reference: think New York Times headlines, Kiplinger, Atlantic magazine
+  default_format: photo_with_text_overlay  # 60-70% of posts. 30-40% fall back to text_quote_card_on_cream when the topic is pure data/rules.
+  photo_style: warm_natural_lighting, real_people, no_stock_cliches
+
+cadence:
+  default_batch_size: 5  # week 1-2 default; bump as cadence ramps
+  weekly_target: 35
+
+generation:
+  # ENABLED 2026-05-24 after advancing to Anthropic Tier 2 (80k input tokens/min).
+  # Model gets max_uses web searches per batch to verify figures against current sources.
+  web_search_enabled: true
+  web_search_max_uses: 10  # ~2 searches per eligible post for 5-post batch. Model decides which posts need verification.
+
+image_gen:
+  provider: kie
+  # GPT Image 2 via Kie.ai. C2PA metadata only (stripped by PIL re-export).
+  # Picked over Ideogram after Ideogram BALANCED produced garbled body text
+  # on subtitles (headlines were fine, subtitles were gibberish). GPT Image
+  # is what the owner uses successfully via ChatGPT for game assets.
+  # Nano Banana stays ruled out — pixel-level SynthID = FB AI label suppression.
+  model: gpt-image-2-text-to-image
+  strip_metadata: true
+  input:  # passed verbatim to Kie's input field — works for ANY model with its own param names
+    image_resolution: 1K   # 1K | 2K (+$0.02) | 4K (+$0.05). 1K = ~$0.03/image
+    aspect_ratio: "1:1"    # auto | 1:1 | 9:16 | 16:9 | 4:3 | 3:4. Note: 1:1 cannot be 4K.
+
+links:
+  primary_destination: https://setformoney.com
+  cross_link_options:
+    - escape_the_grind  # URL TBD by owner
+  caption_link_frequency_cap: 0.20  # max 1 in 5 posts may have a link IN the caption (FB downranks these)
+  # Phasing: launch with NO blog links — pure image posts + engagement-only
+  # first comments for the first 1-2 weeks to establish baseline performance.
+  # Flip to true once setformoney.com has enough retirement-niche articles
+  # to receive Layer-2 traffic.
+  first_comment_links_enabled: false
+  first_comment_link_strategy: >
+    When first_comment_links_enabled is true, EVERY post's first comment
+    includes a {{BLOG_LINK}} placeholder pointing at a relevant
+    setformoney.com article (Layer 2 of the triple-dip). Reviewer inserts
+    the real URL during review. First-comment links are not penalized by
+    FB the way caption links are, so 100% coverage is the target when
+    enabled. When false, the first comment is engagement-only (a tip and
+    an open question), with no link placeholder.

@@ -1,0 +1,76 @@
+# Rotation rule: prompt must NOT repeat a theme within 3 days.
+# run_batch.py persists last-3-days state in state.json across runs.
+#
+# 15 themes total. Pivoted 2026-05-24 from retirement-only (10 themes) to
+# broader US personal-finance for the 35-65 "real responsibilities" years.
+# Retirement pillars stay strong (~37% weight). Broader pillars added (~63%)
+# to match the actual topic universe of our top competitors (Dave Ramsey,
+# Suze Orman, Clark Howard, etc.) and triple addressable audience size.
+themes:
+  # --- Retirement pillars (~37% total weight) ---
+  - id: social_security
+    label: Social Security strategy
+    weight: 0.10
+    examples: when to claim, spousal benefits, COLA, the 62-vs-67-vs-70 question, taxation of benefits
+  - id: medicare
+    label: Medicare traps
+    weight: 0.08
+    examples: Part B late penalty, Part D donut hole, Advantage plan gotchas, IRMAA, 7-month enrollment window
+  - id: retirement_accounts
+    label: 401k / IRA / Roth optimization
+    weight: 0.10
+    examples: RMDs (age 73), Roth conversions, the 5-year rule, beneficiary mistakes, employer match
+  - id: retirement_mistakes
+    label: The $X retirement mistake
+    weight: 0.06
+    examples: specific-dollar story framework, claiming SS too early, sequence-of-returns risk
+  - id: estate
+    label: Estate planning basics
+    weight: 0.03
+    examples: wills, beneficiaries, no-will disaster, dying intestate, probate, trusts vs wills
+
+  # --- Broader personal-finance pillars for 35-65 (~63% total weight) ---
+  - id: debt_payoff
+    label: Debt strategy and payoff
+    weight: 0.12
+    examples: credit card balance transfers, mortgage payoff, student loan strategies, debt snowball vs avalanche, HELOC traps
+  - id: money_mindset
+    label: Money psychology and habits
+    weight: 0.10
+    examples: lifestyle creep, money scripts, scarcity vs abundance, budgeting habits, spending triggers, frugality vs cheapness
+  - id: taxes
+    label: Tax-saving strategies
+    weight: 0.09
+    examples: Roth conversions, capital gains, state-tax-friendly states, deductions, retirement contributions for tax breaks, HSA triple tax advantage
+  - id: real_estate_housing
+    label: Housing and real estate decisions
+    weight: 0.07
+    examples: mortgage strategy, refinance timing, downsizing, rent vs own, reverse mortgages (caution), aging in place, HELOC vs cash-out refi
+  - id: scams
+    label: Money scams and fraud
+    weight: 0.06
+    examples: phone scams, grandparent scam, Medicare fraud, romance scams, IRS impersonation, deepfake/AI scams, package delivery scams
+  - id: family_money
+    label: Money conversations across generations
+    weight: 0.05
+    examples: kids' college costs (529s, paying without loans), talking to aging parents about finances, generational wealth, money talks with spouse, sandwich generation
+  - id: cost_inflation
+    label: Cost of living and inflation
+    weight: 0.04
+    examples: real cost of groceries, healthcare inflation, fixed-income reality, energy bills, insurance premium spikes
+  - id: side_income
+    label: Side income and multiple revenue streams
+    weight: 0.04
+    examples: side hustles for 40+, monetizing skills, gig work, consulting, part-time work in retirement, passive income realities
+  - id: insurance
+    label: Insurance strategy
+    weight: 0.03
+    examples: life insurance term vs whole, disability insurance, long-term care, umbrella policies, health insurance gaps, ACA subsidies
+  - id: insider_takes
+    label: Insider takes (things they don't tell you)
+    weight: 0.03
+    examples: Frank Insider voice slot, "what advisors won't say", industry secrets, regulatory loopholes
+  - id: policy_news
+    label: Policy / political news directly impacting personal finance
+    weight: 0.03
+    examples: Fed rate decisions impacting mortgages/savings, SECURE Act updates affecting RMDs, IRS contribution limit changes, Social Security COLA announcements, Medicare premium changes, state-level tax law changes, ACA / Medicaid expansion changes. Always frame around the wallet impact, not political tribalism.
