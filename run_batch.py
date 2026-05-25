@@ -39,41 +39,86 @@ ANTHROPIC_PRICING = {
 }
 
 
+COST_COLS = [
+    "timestamp", "niche", "scrape_used_cache", "apify_posts", "apify_usd",
+    "anthropic_model", "anthropic_input_tokens", "anthropic_output_tokens",
+    "anthropic_cache_read_tokens", "anthropic_web_searches", "anthropic_usd",
+    "kie_images", "kie_usd", "total_usd", "notes",
+]
+
+
 def log_cost(root: pathlib.Path, row: dict) -> None:
-    """Append one row to cost_log.csv at project root. Creates file with header on first write."""
+    """Append the row to BOTH cost_log.csv (simple tail-able log) AND admin.db
+    cost_log table (queryable from SQL, also feeds the daily summary email and
+    future dashboard cost view)."""
+    # CSV — human-readable, easy to grep
     log_path = root / "cost_log.csv"
-    cols = [
-        "timestamp", "niche", "scrape_used_cache", "apify_posts", "apify_usd",
-        "anthropic_model", "anthropic_input_tokens", "anthropic_output_tokens",
-        "anthropic_cache_read_tokens", "anthropic_web_searches", "anthropic_usd",
-        "kie_images", "kie_usd", "total_usd", "notes",
-    ]
     write_header = not log_path.exists()
     with open(log_path, "a") as f:
         if write_header:
-            f.write(",".join(cols) + "\n")
-        f.write(",".join(str(row.get(c, "")) for c in cols) + "\n")
+            f.write(",".join(COST_COLS) + "\n")
+        f.write(",".join(str(row.get(c, "")) for c in COST_COLS) + "\n")
+
+    # SQLite — queryable
+    import sqlite3
+    db_path = root / "admin" / "admin.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cost_log (
+            timestamp TEXT NOT NULL,
+            niche TEXT NOT NULL,
+            scrape_used_cache TEXT,
+            apify_posts INTEGER,
+            apify_usd REAL,
+            anthropic_model TEXT,
+            anthropic_input_tokens INTEGER,
+            anthropic_output_tokens INTEGER,
+            anthropic_cache_read_tokens INTEGER,
+            anthropic_web_searches INTEGER,
+            anthropic_usd REAL,
+            kie_images INTEGER,
+            kie_usd REAL,
+            total_usd REAL,
+            notes TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_log_timestamp ON cost_log(timestamp)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cost_log_niche ON cost_log(niche)")
+    conn.execute(
+        f"INSERT INTO cost_log ({', '.join(COST_COLS)}) VALUES ({', '.join('?' * len(COST_COLS))})",
+        tuple(row.get(c, "") for c in COST_COLS),
+    )
+    conn.commit()
+    conn.close()
 
 
-def calc_anthropic_cost(model: str, usage) -> tuple[int, int, int, int, float]:
+def calc_anthropic_cost(model: str, resp) -> tuple[int, int, int, int, float]:
     """Returns (input_toks, output_toks, cache_read_toks, web_searches, total_usd).
-    Defensively extracts from the SDK's usage object (which may or may not have
-    cache/server_tool fields depending on whether they were used)."""
+
+    Note on web_searches: as of 2026, Anthropic's `usage.server_tool_use.web_search_requests`
+    counter is unreliable (often returns 0 even when searches happened). We count
+    `server_tool_use` blocks directly from response.content instead — those are 1:1
+    with actual tool invocations. Web search results are already included in
+    input_tokens (which IS accurate) so we only charge the $0.01-per-search fee
+    on top of that.
+    """
     rates = ANTHROPIC_PRICING.get(model, ANTHROPIC_PRICING["claude-sonnet-4-6"])
+    usage = resp.usage
     input_t = getattr(usage, "input_tokens", 0) or 0
     output_t = getattr(usage, "output_tokens", 0) or 0
     cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
     cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
-    server_tool = getattr(usage, "server_tool_use", None)
-    web_searches = getattr(server_tool, "web_search_requests", 0) if server_tool else 0
+    # Count actual server_tool_use blocks (search invocations) for accurate fee
+    web_searches = sum(1 for b in resp.content if getattr(b, "type", None) == "server_tool_use")
     cost = (
         input_t * rates["input"] / 1_000_000
         + output_t * rates["output"] / 1_000_000
         + cache_read * rates["cache_read"] / 1_000_000
         + cache_write * rates["cache_write"] / 1_000_000
-        + (web_searches or 0) * ANTHROPIC_WEB_SEARCH_USD
+        + web_searches * ANTHROPIC_WEB_SEARCH_USD
     )
-    return input_t, output_t, cache_read, (web_searches or 0), cost
+    return input_t, output_t, cache_read, web_searches, cost
 
 
 def kie_create_task(model: str, input_payload: dict) -> str:
@@ -291,7 +336,11 @@ create_kwargs = {
 # web_search tool's content payloads push us over the rate limit. Re-enable once on
 # Tier 2 ($40 cumulative API spend) by setting brand.generation.web_search_enabled: true.
 if brand.get("generation", {}).get("web_search_enabled"):
-    max_uses = brand.get("generation", {}).get("web_search_max_uses", 2)
+    # Scale max_uses dynamically by post count instead of using a flat ceiling.
+    # Default: 2 searches per post. So a 1-post batch caps at 2, 5-post at 10.
+    # Prevents the model from "going wild" with 7 searches on a single post.
+    per_post = brand.get("generation", {}).get("web_search_per_post", 2)
+    max_uses = max(2, count * per_post)
     create_kwargs["tools"] = [
         {"type": "web_search_20260209", "name": "web_search", "max_uses": max_uses},
     ]
@@ -299,7 +348,7 @@ if brand.get("generation", {}).get("web_search_enabled"):
 resp = client.messages.create(**create_kwargs)
 # Cost tracking — capture token usage from this response.
 ANTHROPIC_MODEL = create_kwargs["model"]
-a_input, a_output, a_cache_read, a_websearch, anthropic_usd = calc_anthropic_cost(ANTHROPIC_MODEL, resp.usage)
+a_input, a_output, a_cache_read, a_websearch, anthropic_usd = calc_anthropic_cost(ANTHROPIC_MODEL, resp)
 # With tool use, resp.content may contain multiple blocks (text, tool_use, tool_result, text...).
 # Take the LAST text block as the model's final answer.
 text_blocks = [b for b in resp.content if getattr(b, "type", None) == "text"]

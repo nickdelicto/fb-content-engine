@@ -79,7 +79,7 @@ def send_failure_alert(stage: str, error_text: str, niche: str = "", extra_conte
       {f'<p style="color: #5A6472; font-size: 13px;">{extra_context}</p>' if extra_context else ''}
       <p style="color: #8a8678; font-size: 12px; margin-top: 18px;">Check VPS logs at <code>/home/delicto/apps/fb-content-engine/logs/</code>.</p>
     """
-    _send(f"[fb-content-engine] Batch failed: {stage}", _email_layout(inner))
+    _send(f"FB Content Engine Batch Failed: {stage}", _email_layout(inner))
 
 
 def send_daily_cost_summary(date_iso: str = None) -> None:
@@ -91,7 +91,7 @@ def send_daily_cost_summary(date_iso: str = None) -> None:
     log_path = ROOT / "cost_log.csv"
     if not log_path.exists():
         _send(
-            f"[fb-content-engine] No cost data for {date_iso}",
+            f"FB Content Engine — No Cost Data for {date_iso}",
             _email_layout(f'<p style="color: #5A6472;">No <code>cost_log.csv</code> file exists yet. Either no batches have run, or the file path is wrong.</p>'),
         )
         return
@@ -105,7 +105,7 @@ def send_daily_cost_summary(date_iso: str = None) -> None:
           <h2 style="font-family: Georgia, serif; font-size: 22px; color: #C4A86B; margin: 0 0 12px 0;">No batches ran on {date_iso}</h2>
           <p style="color: #5A6472; font-size: 14px;">If a batch was expected today, check the cron logs on the VPS.</p>
         """
-        _send(f"[fb-content-engine] No spend on {date_iso}", _email_layout(inner))
+        _send(f"FB Content Engine — No Spend on {date_iso}", _email_layout(inner))
         return
 
     apify_total = day_df["apify_usd"].astype(float).sum()
@@ -163,7 +163,7 @@ def send_daily_cost_summary(date_iso: str = None) -> None:
         <tbody>{rows_html}</tbody>
       </table>
     """
-    _send(f"[fb-content-engine] Daily spend — {date_iso} — ${total:.4f}", _email_layout(inner))
+    _send(f"FB Content Engine Daily Spend — {date_iso} — ${total:.4f}", _email_layout(inner))
 
 
 # Allow CLI invocation: python -m notify daily | python -m notify test-fail
