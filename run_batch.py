@@ -46,9 +46,22 @@ def kie_create_task(model: str, input_payload: dict) -> str:
     return data["data"]["taskId"]
 
 
-def kie_poll_task(task_id: str, timeout_sec: int = 300, interval_sec: int = 5) -> str:
+def kie_poll_task(task_id: str, timeout_sec: int = 900) -> str:
+    """Poll Kie until task reports success or fail. Adaptive interval: 5s for first
+    minute (most tasks finish here), 10s for next 4 min, 30s after. 15-min hard cap.
+    On timeout we don't assume failure — the task may still complete on Kie's end;
+    error message tells you how to query it directly.
+    """
     deadline = time.time() + timeout_sec
+    started = time.time()
     while time.time() < deadline:
+        elapsed = time.time() - started
+        if elapsed < 60:
+            interval = 5
+        elif elapsed < 300:
+            interval = 10
+        else:
+            interval = 30
         resp = requests.get(
             f"{KIE_BASE}/recordInfo",
             params={"taskId": task_id},
@@ -70,8 +83,12 @@ def kie_poll_task(task_id: str, timeout_sec: int = 300, interval_sec: int = 5) -
             return urls[0]
         if state == "fail":
             raise RuntimeError(f"Kie task failed: {data.get('failMsg') or data}")
-        time.sleep(interval_sec)
-    raise TimeoutError(f"Kie task {task_id} did not complete within {timeout_sec}s")
+        time.sleep(interval)
+    raise TimeoutError(
+        f"Kie task {task_id} did not complete within {timeout_sec}s of polling. "
+        f"The task may still be running on Kie's end. Query directly: "
+        f"GET https://api.kie.ai/api/v1/jobs/recordInfo?taskId={task_id}"
+    )
 
 
 def fetch_and_save_image(url: str, out_path: pathlib.Path, strip_metadata: bool) -> None:
