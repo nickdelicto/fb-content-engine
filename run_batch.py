@@ -126,14 +126,20 @@ system_prompt = (niche_dir / "prompts" / "system.md").read_text()
 
 count = args.count or brand["cadence"]["default_batch_size"]
 
-today = datetime.date.today().isoformat()
-out_dir = niche_dir / "out" / today
+# Output is dated to the day the post is FOR (tomorrow), not the day it's generated.
+# Cron runs today → posts saved to out/<tomorrow>/ → admin UI reads out/<today>/ and
+# the rollover at midnight Just Works™. VA always sees "today's posts to schedule"
+# without having to think about generation vs publishing dates.
+generation_date = datetime.date.today()
+target_date_obj = generation_date + datetime.timedelta(days=1)
+target_date = target_date_obj.isoformat()
+out_dir = niche_dir / "out" / target_date
 (out_dir / "images").mkdir(parents=True, exist_ok=True)
 
-# 3-day theme rotation state
+# 3-day theme rotation state — rotate against the 3 days BEFORE the target publish date.
 state_path = niche_dir / "state.json"
 state = json.loads(state_path.read_text()) if state_path.exists() else {"recent": []}
-cutoff = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
+cutoff = (target_date_obj - datetime.timedelta(days=3)).isoformat()
 recent_themes = sorted({e["theme"] for e in state["recent"] if e["date"] >= cutoff})
 
 # --- Stage B: scrape competitors via Apify (with optional cache) ---
@@ -273,7 +279,7 @@ for i, post in enumerate(posts):
 # --- Write outputs ---
 pd.DataFrame(rows).to_csv(out_dir / "batch.csv", index=False)
 with open(out_dir / "batch.md", "w") as f:
-    f.write(f"# Batch {today} — {args.niche}\n\n")
+    f.write(f"# Posts for {target_date} (generated {generation_date.isoformat()}) — {args.niche}\n\n")
     for r in rows:
         f.write(f"## {r['post_id']} — {r['theme']} ({r['hook_type']})\n\n")
         if r["image_file"]:
@@ -285,10 +291,10 @@ with open(out_dir / "batch.md", "w") as f:
 
 # Persist theme rotation state (prune anything older than the 3-day window)
 state["recent"] = [e for e in state["recent"] if e["date"] >= cutoff]
-state["recent"].extend([{"date": today, "theme": r["theme"]} for r in rows])
+state["recent"].extend([{"date": target_date, "theme": r["theme"]} for r in rows])
 state_path.write_text(json.dumps(state, indent=2))
 
-print(f"\n[done] {len(rows)} posts → {out_dir}", flush=True)
+print(f"\n[done] {len(rows)} posts scheduled for {target_date} → {out_dir}", flush=True)
 if warnings:
     print(f"[warnings] {len(warnings)}:")
     for w in warnings:
