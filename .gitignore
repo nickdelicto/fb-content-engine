@@ -9,3 +9,5 @@ niches/*/cache/
 admin/admin.db
 admin/admin.db-journal
 admin/__pycache__/
+cost_log.csv
+logs/

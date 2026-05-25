@@ -28,6 +28,53 @@ from PIL import Image
 
 KIE_BASE = "https://api.kie.ai/api/v1/jobs"
 
+# Cost-tracking constants. Update when models or pricing change.
+APIFY_FB_POSTS_USD_PER_1000 = 2.00
+ANTHROPIC_WEB_SEARCH_USD = 0.01  # per search (= $10/1000)
+ANTHROPIC_PRICING = {
+    # USD per million tokens
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-opus-4-7":   {"input": 5.00, "output": 25.00, "cache_read": 0.50, "cache_write": 6.25},
+    "claude-haiku-4-5":  {"input": 1.00, "output": 5.00,  "cache_read": 0.10, "cache_write": 1.25},
+}
+
+
+def log_cost(root: pathlib.Path, row: dict) -> None:
+    """Append one row to cost_log.csv at project root. Creates file with header on first write."""
+    log_path = root / "cost_log.csv"
+    cols = [
+        "timestamp", "niche", "scrape_used_cache", "apify_posts", "apify_usd",
+        "anthropic_model", "anthropic_input_tokens", "anthropic_output_tokens",
+        "anthropic_cache_read_tokens", "anthropic_web_searches", "anthropic_usd",
+        "kie_images", "kie_usd", "total_usd", "notes",
+    ]
+    write_header = not log_path.exists()
+    with open(log_path, "a") as f:
+        if write_header:
+            f.write(",".join(cols) + "\n")
+        f.write(",".join(str(row.get(c, "")) for c in cols) + "\n")
+
+
+def calc_anthropic_cost(model: str, usage) -> tuple[int, int, int, int, float]:
+    """Returns (input_toks, output_toks, cache_read_toks, web_searches, total_usd).
+    Defensively extracts from the SDK's usage object (which may or may not have
+    cache/server_tool fields depending on whether they were used)."""
+    rates = ANTHROPIC_PRICING.get(model, ANTHROPIC_PRICING["claude-sonnet-4-6"])
+    input_t = getattr(usage, "input_tokens", 0) or 0
+    output_t = getattr(usage, "output_tokens", 0) or 0
+    cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    cache_write = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    server_tool = getattr(usage, "server_tool_use", None)
+    web_searches = getattr(server_tool, "web_search_requests", 0) if server_tool else 0
+    cost = (
+        input_t * rates["input"] / 1_000_000
+        + output_t * rates["output"] / 1_000_000
+        + cache_read * rates["cache_read"] / 1_000_000
+        + cache_write * rates["cache_write"] / 1_000_000
+        + (web_searches or 0) * ANTHROPIC_WEB_SEARCH_USD
+    )
+    return input_t, output_t, cache_read, (web_searches or 0), cost
+
 
 def kie_create_task(model: str, input_payload: dict) -> str:
     resp = requests.post(
@@ -107,6 +154,27 @@ def fetch_and_save_image(url: str, out_path: pathlib.Path, strip_metadata: bool)
 ROOT = pathlib.Path(__file__).parent
 load_dotenv(ROOT / ".env")
 
+
+def _on_uncaught_exception(exc_type, exc_value, exc_tb):
+    """Send a failure alert on any uncaught error, then re-raise so the original
+    traceback still surfaces. Skips KeyboardInterrupt and clean exit(0)."""
+    import traceback as _tb
+    if exc_type is KeyboardInterrupt or (exc_type is SystemExit and (exc_value.code == 0 or exc_value.code is None)):
+        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        return
+    tb_str = "".join(_tb.format_exception(exc_type, exc_value, exc_tb))
+    try:
+        from notify import send_failure_alert
+        niche_name = globals().get("args").niche if globals().get("args") else "unknown"
+        # Truncate to avoid massive email bodies
+        send_failure_alert(stage="batch", error_text=tb_str[-3000:], niche=niche_name)
+    except Exception:
+        pass  # never let the alert send fail mask the original error
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
+
+
+sys.excepthook = _on_uncaught_exception
+
 parser = argparse.ArgumentParser(description="Generate a batch of FB posts for a niche.")
 parser.add_argument("--niche", required=True, help="Niche folder name under niches/")
 parser.add_argument("--count", type=int, default=None,
@@ -147,9 +215,14 @@ cache_dir = niche_dir / "cache"
 cache_dir.mkdir(parents=True, exist_ok=True)
 scrape_cache_path = cache_dir / "apify_raw.json"
 
+# Cost tracking counters (used at end to write cost_log.csv row)
+scrape_used_cache = False
+apify_posts_scraped = 0
+
 if args.use_cached_scrape and scrape_cache_path.exists():
     cached = json.loads(scrape_cache_path.read_text())
     raw_posts = cached["posts"]
+    scrape_used_cache = True
     print(f"[cache] using scrape from {cached['scraped_at']} ({len(raw_posts)} posts) — saved $0.37 Apify spend", flush=True)
 else:
     if args.use_cached_scrape:
@@ -163,6 +236,7 @@ else:
         }
     )
     raw_posts = list(apify.dataset(run.default_dataset_id).iterate_items())
+    apify_posts_scraped = len(raw_posts)
     print(f"[scrape] got {len(raw_posts)} posts", flush=True)
     # Save to cache so future runs can use --use-cached-scrape
     scrape_cache_path.write_text(json.dumps({
@@ -223,6 +297,9 @@ if brand.get("generation", {}).get("web_search_enabled"):
     ]
 
 resp = client.messages.create(**create_kwargs)
+# Cost tracking — capture token usage from this response.
+ANTHROPIC_MODEL = create_kwargs["model"]
+a_input, a_output, a_cache_read, a_websearch, anthropic_usd = calc_anthropic_cost(ANTHROPIC_MODEL, resp.usage)
 # With tool use, resp.content may contain multiple blocks (text, tool_use, tool_result, text...).
 # Take the LAST text block as the model's final answer.
 text_blocks = [b for b in resp.content if getattr(b, "type", None) == "text"]
@@ -248,9 +325,11 @@ except json.JSONDecodeError as e:
 
 # --- Stage D: images via Kie.ai (async task pattern) + package ---
 img_cfg = brand["image_gen"]
+KIE_COST_PER_IMAGE = float(img_cfg.get("cost_per_image", 0.03))  # default to GPT Image 2 1K rate
 print(f"[images] generating {len(posts)} via {img_cfg['model']}…", flush=True)
 rows = []
 warnings = []
+kie_images_generated = 0
 for i, post in enumerate(posts):
     img_file = ""
     try:
@@ -264,6 +343,7 @@ for i, post in enumerate(posts):
         img_path = out_dir / "images" / f"post_{i:02d}.png"
         fetch_and_save_image(img_url, img_path, strip_metadata=img_cfg.get("strip_metadata", True))
         img_file = img_path.name
+        kie_images_generated += 1
     except (requests.RequestException, RuntimeError, TimeoutError, KeyError) as e:
         warnings.append(f"post_{i:02d}: image generation failed ({e})")
 
@@ -294,7 +374,30 @@ state["recent"] = [e for e in state["recent"] if e["date"] >= cutoff]
 state["recent"].extend([{"date": target_date, "theme": r["theme"]} for r in rows])
 state_path.write_text(json.dumps(state, indent=2))
 
+# --- Cost tracking: write one row to cost_log.csv ---
+apify_usd = (apify_posts_scraped / 1000.0) * APIFY_FB_POSTS_USD_PER_1000
+kie_usd = kie_images_generated * KIE_COST_PER_IMAGE
+total_usd = apify_usd + anthropic_usd + kie_usd
+log_cost(ROOT, {
+    "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+    "niche": args.niche,
+    "scrape_used_cache": "yes" if scrape_used_cache else "no",
+    "apify_posts": apify_posts_scraped,
+    "apify_usd": f"{apify_usd:.4f}",
+    "anthropic_model": ANTHROPIC_MODEL,
+    "anthropic_input_tokens": a_input,
+    "anthropic_output_tokens": a_output,
+    "anthropic_cache_read_tokens": a_cache_read,
+    "anthropic_web_searches": a_websearch,
+    "anthropic_usd": f"{anthropic_usd:.4f}",
+    "kie_images": kie_images_generated,
+    "kie_usd": f"{kie_usd:.4f}",
+    "total_usd": f"{total_usd:.4f}",
+    "notes": f"warnings={len(warnings)}" if warnings else "",
+})
+
 print(f"\n[done] {len(rows)} posts scheduled for {target_date} → {out_dir}", flush=True)
+print(f"[cost] this batch: ${total_usd:.4f}  (apify ${apify_usd:.4f} | anthropic ${anthropic_usd:.4f} | kie ${kie_usd:.4f})", flush=True)
 if warnings:
     print(f"[warnings] {len(warnings)}:")
     for w in warnings:
