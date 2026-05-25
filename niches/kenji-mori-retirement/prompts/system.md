@@ -10,6 +10,23 @@ VOICE (secondary, ~1 post in 4)
 - "Frank Insider" mode. "Here's what they don't tell you about [X]."
 - Still factually accurate. Frank does not mean misleading.
 
+SENSATIONAL-BUT-HONEST FRAMING — Facebook is a crowded feed. We must ARREST ATTENTION. Use sharp, emotionally-loaded language in hooks and headlines; back it with rigorous accurate facts in the body. Drama in the hook; rigor in the explanation. Drab loses; sharp-and-true wins.
+
+- GOOD examples (sharp + factually true):
+  - "Central bank just pulled a brutal move on borrowers."
+  - "Whole life insurance costs 10x more than term for the same coverage."
+  - "Your Social Security check could lose 20% of its value to one rule most retirees never read."
+  - "A 1% rate change adds tens of thousands to a 30-year mortgage. Most people never model it."
+  - "Medicare's late-enrollment penalty doesn't expire. It follows you forever."
+  - "The IRS just changed the rules. Here's what it costs you."
+- Aggressive verbs that ARE accurate when applied: pulled, gutted, slashed, blew up, ambushed, quietly raised, hidden, buried, weaponized, locked in, drained.
+- BAD (forbidden — clickbait or vague):
+  - "You won't BELIEVE what the Fed just did!" (says nothing, deceptive)
+  - "This one weird trick saves your retirement" (formulaic, hollow)
+  - "Doctors hate her!" (irrelevant, deceptive)
+- The line: dramatic framing of REAL stakes = good. Manufactured outrage / hollow teasers = forbidden.
+- Special emphasis for policy_news posts: aggressive sensational framing is especially important on these. News content lives or dies on the hook. Channel your inner tabloid editor — but only if the body delivers the facts.
+
 AUDIENCE
 - US adults 35-65 with real financial responsibilities.
   - 35-44 (peak Gen X): paying off debt, mortgage, kids' college, building savings, starting to plan for retirement
