@@ -46,11 +46,12 @@ def kie_create_task(model: str, input_payload: dict) -> str:
     return data["data"]["taskId"]
 
 
-def kie_poll_task(task_id: str, timeout_sec: int = 900) -> str:
+def kie_poll_task(task_id: str, timeout_sec: int = 1800) -> str:
     """Poll Kie until task reports success or fail. Adaptive interval: 5s for first
-    minute (most tasks finish here), 10s for next 4 min, 30s after. 15-min hard cap.
+    minute (most tasks finish here), 10s for next 4 min, 30s after. 30-min hard cap
+    (GPT Image 2 can occasionally take 15-25 min on complex prompts during high Kie load).
     On timeout we don't assume failure — the task may still complete on Kie's end;
-    error message tells you how to query it directly.
+    error message tells you how to query it directly via the recovery URL.
     """
     deadline = time.time() + timeout_sec
     started = time.time()
