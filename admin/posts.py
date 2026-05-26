@@ -24,13 +24,23 @@ class Post:
     recommended_time: Optional[str] = None  # e.g., "8:00 AM"
 
 
-# Recommended posting times. Spread across waking hours.
-# Supports up to 10 posts/day in suggested slots; beyond that, no recommendation.
-# Operator uses these as rough guidance — actual posting time is their call.
-RECOMMENDED_TIMES_10 = [
-    "8:00 AM", "9:30 AM", "11:00 AM", "12:30 PM", "2:00 PM",
-    "3:30 PM", "5:00 PM", "6:30 PM", "8:00 PM", "9:30 PM",
-]
+# Recommended posting times per day-of-week, matching the owner's posting strategy.
+# Mon-Fri optimized for working-hours engagement; Sat morning; Sun afternoon/evening
+# for reflective/personal-development content.
+# Each day has 5 slots = the main daily quota. Posts beyond 5 (from stacked batches)
+# show no recommendation — operator picks the timing.
+# Keys: 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun (Python date.weekday())
+# ALL TIMES ARE EASTERN TIME (ET). Operator schedules in Meta Business Suite
+# using these as ET reference points.
+SCHEDULE_BY_DAY = {
+    0: ["9:00 AM ET",  "10:00 AM ET", "3:00 PM ET",  "4:30 PM ET", "6:00 PM ET"],   # Monday:    9-10 AM + 3-6 PM
+    1: ["10:00 AM ET", "3:00 PM ET",  "4:00 PM ET",  "5:00 PM ET", "6:00 PM ET"],   # Tuesday:   10 AM + 3-6 PM
+    2: ["10:00 AM ET", "11:00 AM ET", "2:00 PM ET",  "4:00 PM ET", "6:00 PM ET"],   # Wednesday: 10-11 AM + 2-6 PM
+    3: ["9:00 AM ET",  "3:00 PM ET",  "4:00 PM ET",  "5:00 PM ET", "6:00 PM ET"],   # Thursday:  9 AM + 3-6 PM
+    4: ["9:00 AM ET",  "3:00 PM ET",  "4:00 PM ET",  "5:00 PM ET", "6:00 PM ET"],   # Friday:    9 AM + 3-6 PM
+    5: ["9:00 AM ET",  "10:00 AM ET", "11:30 AM ET", "12:00 PM ET","1:00 PM ET"],   # Saturday:  9 AM - 1 PM
+    6: ["3:00 PM ET",  "4:30 PM ET",  "6:00 PM ET",  "7:30 PM ET", "9:00 PM ET"],   # Sunday:    3-9 PM (reflective/personal dev)
+}
 
 
 def list_niches(root: pathlib.Path) -> list[str]:
@@ -48,6 +58,12 @@ def load_posts(root: pathlib.Path, niche: str, target_date: str, status_lookup: 
     if not csv_path.exists():
         return []
     df = pd.read_csv(csv_path)
+    # Day-of-week schedule lookup — same for every post on this date
+    try:
+        day_of_week = datetime.date.fromisoformat(target_date).weekday()
+        times_for_day = SCHEDULE_BY_DAY.get(day_of_week, [])
+    except (ValueError, TypeError):
+        times_for_day = []
     posts = []
     for i, row in df.iterrows():
         post_id = row["post_id"]
@@ -60,7 +76,7 @@ def load_posts(root: pathlib.Path, niche: str, target_date: str, status_lookup: 
                 img_file = f"{post_id}.png"
             else:
                 img_file = ""
-        rec_time = RECOMMENDED_TIMES_10[i] if i < len(RECOMMENDED_TIMES_10) else None
+        rec_time = times_for_day[i] if i < len(times_for_day) else None
         status = status_lookup.get((niche, target_date, post_id), {})
         posts.append(Post(
             niche=niche,
