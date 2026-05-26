@@ -226,6 +226,8 @@ parser.add_argument("--count", type=int, default=None,
                     help="Number of posts (defaults to brand.cadence.default_batch_size)")
 parser.add_argument("--use-cached-scrape", action="store_true",
                     help="Reuse the last saved Apify scrape from niches/<niche>/cache/apify_raw.json instead of calling Apify. Saves ~$0.37/run when iterating on Anthropic/Kie logic. Falls through to live scrape if no cache exists.")
+parser.add_argument("--lead-days", type=int, default=None,
+                    help="Override generation.lead_time_days from brand.yaml. Use 1 to fill a gap on tomorrow, 0 for today, etc.")
 args = parser.parse_args()
 
 niche_dir = ROOT / "niches" / args.niche
@@ -244,7 +246,7 @@ count = args.count or brand["cadence"]["default_batch_size"]
 # in the dashboard even if a batch fails or needs a rerun. Override via brand.yaml
 # `generation.lead_time_days` if a niche wants a different cadence.
 generation_date = datetime.date.today()
-lead_days = int(brand.get("generation", {}).get("lead_time_days", 2))
+lead_days = args.lead_days if args.lead_days is not None else int(brand.get("generation", {}).get("lead_time_days", 2))
 target_date_obj = generation_date + datetime.timedelta(days=lead_days)
 target_date = target_date_obj.isoformat()
 out_dir = niche_dir / "out" / target_date
