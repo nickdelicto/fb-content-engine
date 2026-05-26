@@ -239,12 +239,13 @@ system_prompt = (niche_dir / "prompts" / "system.md").read_text()
 
 count = args.count or brand["cadence"]["default_batch_size"]
 
-# Output is dated to the day the post is FOR (tomorrow), not the day it's generated.
-# Cron runs today → posts saved to out/<tomorrow>/ → admin UI reads out/<today>/ and
-# the rollover at midnight Just Works™. VA always sees "today's posts to schedule"
-# without having to think about generation vs publishing dates.
+# Output is dated to the day the post is FOR (publish date), N days ahead of generation.
+# Default lead time is 2 days so the operator always has a full "tomorrow" buffer
+# in the dashboard even if a batch fails or needs a rerun. Override via brand.yaml
+# `generation.lead_time_days` if a niche wants a different cadence.
 generation_date = datetime.date.today()
-target_date_obj = generation_date + datetime.timedelta(days=1)
+lead_days = int(brand.get("generation", {}).get("lead_time_days", 2))
+target_date_obj = generation_date + datetime.timedelta(days=lead_days)
 target_date = target_date_obj.isoformat()
 out_dir = niche_dir / "out" / target_date
 (out_dir / "images").mkdir(parents=True, exist_ok=True)

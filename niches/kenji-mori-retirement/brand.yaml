@@ -41,6 +41,10 @@ cadence:
   weekly_target: 35
 
 generation:
+  # 2-day lead time: generate today for a post that goes out the day after tomorrow.
+  # Gives the operator a full day of "tomorrow" buffer in the dashboard, so a failed
+  # batch never leaves them empty-handed for the next morning.
+  lead_time_days: 2
   # ENABLED 2026-05-24 after advancing to Anthropic Tier 2 (80k input tokens/min).
   # Model gets max_uses web searches per batch to verify figures against current sources.
   web_search_enabled: true
