@@ -364,28 +364,48 @@ resp = client.messages.create(**create_kwargs)
 # Cost tracking — capture token usage from this response.
 ANTHROPIC_MODEL = create_kwargs["model"]
 a_input, a_output, a_cache_read, a_websearch, anthropic_usd = calc_anthropic_cost(ANTHROPIC_MODEL, resp)
-# With tool use, resp.content may contain multiple blocks (text, tool_use, tool_result, text...).
-# Take the LAST text block as the model's final answer.
+# With tool use (web_search), resp.content has multiple blocks interleaved:
+# [text, server_tool_use, web_search_tool_result, text, server_tool_use, ..., text].
+# The JSON array can live in ANY text block (often the first), not necessarily the
+# last — the last is frequently editorial commentary the model adds after the
+# search loop completes. Iterate through all text blocks and find the one whose
+# contents parse as a JSON list of dicts (= our posts schema).
 text_blocks = [b for b in resp.content if getattr(b, "type", None) == "text"]
 if not text_blocks:
     (out_dir / "raw_response.txt").write_text(json.dumps([b.model_dump() if hasattr(b, "model_dump") else str(b) for b in resp.content], indent=2))
     sys.exit("[generate] No text block in response. Saved raw content for inspection.")
-raw_text = text_blocks[-1].text.strip()
-# Always save raw response — cheap insurance for debugging schema drift / truncation
-(out_dir / "raw_response.txt").write_text(raw_text)
 
-# Extract just the JSON array, ignoring any markdown fencing OR post-array commentary
-# the model adds (especially with tool use, where it often appends editorial notes).
-first_bracket = raw_text.find("[")
-last_bracket = raw_text.rfind("]")
-if first_bracket == -1 or last_bracket == -1 or last_bracket < first_bracket:
-    sys.exit(f"[generate] Could not find JSON array boundaries in response. Raw saved to {out_dir / 'raw_response.txt'}.")
-json_text = raw_text[first_bracket : last_bracket + 1]
+# Save full concatenation for debugging (so raw_response.txt isn't just the last block)
+full_raw = "\n\n---BLOCK---\n\n".join(b.text for b in text_blocks)
+(out_dir / "raw_response.txt").write_text(full_raw)
 
-try:
-    posts = json.loads(json_text)
-except json.JSONDecodeError as e:
-    sys.exit(f"[generate] JSON parse failed: {e}. Raw saved to {out_dir / 'raw_response.txt'}.")
+posts = None
+json_text = None
+for block in text_blocks:
+    candidate_text = block.text.strip()
+    # Strip leading ```json fence if present
+    if candidate_text.startswith("```"):
+        candidate_text = candidate_text.lstrip("`").lstrip()
+        if candidate_text.lower().startswith("json"):
+            candidate_text = candidate_text[4:].lstrip()
+        if "```" in candidate_text:
+            candidate_text = candidate_text[:candidate_text.index("```")].rstrip()
+    first_bracket = candidate_text.find("[")
+    last_bracket = candidate_text.rfind("]")
+    if first_bracket == -1 or last_bracket == -1 or last_bracket < first_bracket:
+        continue
+    candidate = candidate_text[first_bracket: last_bracket + 1]
+    try:
+        loaded = json.loads(candidate)
+        if isinstance(loaded, list) and loaded and isinstance(loaded[0], dict) and "caption" in loaded[0]:
+            posts = loaded
+            json_text = candidate
+            break
+    except json.JSONDecodeError:
+        continue
+
+if posts is None:
+    sys.exit(f"[generate] No text block contained a parseable JSON array of posts. Raw saved to {out_dir / 'raw_response.txt'}.")
 
 
 def strip_em_dashes(text: str) -> str:
