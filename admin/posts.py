@@ -2,10 +2,16 @@
 post-status tracking from admin.db."""
 import datetime
 import pathlib
+import zoneinfo
 from dataclasses import dataclass
 from typing import Optional
 
 import pandas as pd
+
+# Dashboard "today" rolls over at midnight ET, not midnight UTC. VPS is on UTC,
+# so without this the dashboard would flip to tomorrow at 8pm ET — bad UX for an
+# operator still posting that day's content in the evening.
+ET = zoneinfo.ZoneInfo("America/New_York")
 
 
 @dataclass
@@ -96,8 +102,8 @@ def load_posts(root: pathlib.Path, niche: str, target_date: str, status_lookup: 
 
 
 def today_iso() -> str:
-    return datetime.date.today().isoformat()
+    return datetime.datetime.now(ET).date().isoformat()
 
 
 def tomorrow_iso() -> str:
-    return (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
+    return (datetime.datetime.now(ET).date() + datetime.timedelta(days=1)).isoformat()
