@@ -252,11 +252,24 @@ target_date = target_date_obj.isoformat()
 out_dir = niche_dir / "out" / target_date
 (out_dir / "images").mkdir(parents=True, exist_ok=True)
 
-# 3-day theme rotation state — rotate against the 3 days BEFORE the target publish date.
+# Rotation state:
+#   - Themes rotate against the 3 days BEFORE target publish date (coarse, 12 buckets).
+#   - Source competitor post_ids rotate against the 7 days BEFORE target — prevents
+#     re-mining the same Apify post twice in a week, even though the cached scrape
+#     pool only refreshes on Sundays. Math: 5 posts/day * 7 days = 35 unique source
+#     ids needed; scrape pool is 90 (30 per competitor * 3), so plenty of headroom.
 state_path = niche_dir / "state.json"
 state = json.loads(state_path.read_text()) if state_path.exists() else {"recent": []}
-cutoff = (target_date_obj - datetime.timedelta(days=3)).isoformat()
-recent_themes = sorted({e["theme"] for e in state["recent"] if e["date"] >= cutoff})
+theme_cutoff = (target_date_obj - datetime.timedelta(days=3)).isoformat()
+src_cutoff = (target_date_obj - datetime.timedelta(days=7)).isoformat()
+recent_themes = sorted({e["theme"] for e in state["recent"] if e["date"] >= theme_cutoff})
+excluded_source_ids = {
+    pid
+    for e in state["recent"]
+    if e["date"] >= src_cutoff
+    for pid in e.get("source_post_ids", [])
+    if pid
+}
 
 # --- Stage B: scrape competitors via Apify (with optional cache) ---
 cache_dir = niche_dir / "cache"
@@ -313,6 +326,13 @@ def slim_post(p: dict) -> dict:
         "shares": p.get("shares", 0),
         "post_id": p.get("postId") or "",
     }
+
+# Source-post dedup: drop anything we already drew from in the last 7 days BEFORE
+# ranking, so the model always sees fresh material from this week's scrape pool.
+if excluded_source_ids:
+    before = len(raw_posts)
+    raw_posts = [p for p in raw_posts if (p.get("postId") or "") not in excluded_source_ids]
+    print(f"[dedup] excluded {before - len(raw_posts)} source posts used in last 7 days ({len(raw_posts)} remaining)", flush=True)
 
 # Diversified ranking: top N PER competitor (not top N overall).
 # Pre-2026-05-25 bug: ranking by velocity globally let the highest-audience page
@@ -484,6 +504,11 @@ for i, post in enumerate(posts):
     except (requests.RequestException, RuntimeError, TimeoutError, KeyError) as e:
         warnings.append(f"{post_id}: image generation failed ({e})")
 
+    # source_post_ids: defensive — model may return list/string/missing. Normalize to list[str].
+    raw_src = post.get("source_post_ids") or []
+    if isinstance(raw_src, str):
+        raw_src = [raw_src]
+    src_ids = [str(s).strip() for s in raw_src if str(s).strip()]
     rows.append({
         "post_id": post_id,
         "theme": post["theme"],
@@ -491,12 +516,16 @@ for i, post in enumerate(posts):
         "image_file": img_file,
         "caption": post["caption"],
         "first_comment": post["first_comment"],
+        "source_post_ids": src_ids,
     })
 
 # --- Write outputs (APPEND if existing) ---
+# Strip source_post_ids from CSV — it's only needed for state.json week-over-week
+# dedup, not for the dashboard. Keeps batch.csv schema stable.
+csv_rows = [{k: v for k, v in r.items() if k != "source_post_ids"} for r in rows]
 csv_mode = "a" if existing_count > 0 else "w"
 write_header = existing_count == 0
-pd.DataFrame(rows).to_csv(existing_csv, mode=csv_mode, header=write_header, index=False)
+pd.DataFrame(csv_rows).to_csv(existing_csv, mode=csv_mode, header=write_header, index=False)
 
 md_mode = "a" if (out_dir / "batch.md").exists() and existing_count > 0 else "w"
 with open(out_dir / "batch.md", md_mode) as f:
@@ -512,9 +541,17 @@ with open(out_dir / "batch.md", md_mode) as f:
         f.write(f"**Caption:**\n\n{r['caption']}\n\n")
         f.write(f"**First comment:**\n\n{r['first_comment']}\n\n---\n\n")
 
-# Persist theme rotation state (prune anything older than the 3-day window)
-state["recent"] = [e for e in state["recent"] if e["date"] >= cutoff]
-state["recent"].extend([{"date": target_date, "theme": r["theme"]} for r in rows])
+# Persist rotation state. Prune to the 7-day window (the wider of the two cutoffs —
+# theme rotation uses a 3-day subset, source-post dedup uses the full 7).
+state["recent"] = [e for e in state["recent"] if e["date"] >= src_cutoff]
+state["recent"].extend([
+    {
+        "date": target_date,
+        "theme": r["theme"],
+        "source_post_ids": r["source_post_ids"],
+    }
+    for r in rows
+])
 state_path.write_text(json.dumps(state, indent=2))
 
 # --- Cost tracking: write one row to cost_log.csv ---

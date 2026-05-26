@@ -123,11 +123,12 @@ For each of N posts:
 
 OUTPUT (strict JSON, no preamble, no markdown)
 
-Return ONLY a JSON array of N objects. EVERY object MUST contain ALL SIX keys below. Never omit any key — image_prompt in particular is required for every object. Each object's keys:
+Return ONLY a JSON array of N objects. EVERY object MUST contain ALL SEVEN keys below. Never omit any key — image_prompt and source_post_ids in particular are required for every object. Each object's keys:
 
 {
   "theme": <one of the rotation themes>,
   "hook_type": <one of: statistical | story | curiosity_gap | specific_dollar | contrarian_truth>,
+  "source_post_ids": <JSON array of 1-3 post_id strings from the input's top_posts that you drew inspiration from for this output. Use the exact post_id values shown in top_posts (e.g., ["pfbid0xyz...", "pfbid0abc..."]). Required so we can rotate source posts week-over-week and avoid re-mining the same competitor content twice.>,
   "structure_inspiration": <one-line note on which winning structure you used and why>,
   "caption": <50-80 words. Hook in first sentence (scroll-stopper). Specific figure(s) or fact in middle. Soft CTA or thought-prompt at end. Stay tight — every sentence must earn its place. Don't pad. If the topic doesn't need 80 words, write 60.>,
   "first_comment": <our engineered first comment, posted as the page itself. Adds substance — a related fact, an additional angle, or context that builds on the main post. Ends with an open question. WRITE NATURALLY: dive directly into the content, no labeled-with-colon openers ("Quick tip:", "One thing worth knowing:" etc. — see AVOID AI TELLS section). CONDITIONAL on brand.links.first_comment_links_enabled in the input: if TRUE, include a {{BLOG_LINK}} placeholder token at a natural point in the comment. If FALSE, do NOT include any link placeholder.>,
