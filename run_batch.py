@@ -372,6 +372,24 @@ try:
 except json.JSONDecodeError as e:
     sys.exit(f"[generate] JSON parse failed: {e}. Raw saved to {out_dir / 'raw_response.txt'}.")
 
+
+def strip_em_dashes(text: str) -> str:
+    """Bulletproof em-dash removal. The model keeps slipping them in despite the
+    prompt ban. Replace ' — ' (space-em-space, the most common form) with ', '.
+    Then replace any remaining bare em dash with ', '. Also strips en dashes."""
+    if not isinstance(text, str):
+        return text
+    # Em-dash (U+2014) and en-dash (U+2013)
+    text = text.replace(" — ", ", ").replace("—", ",").replace(" – ", ", ").replace("–", ",")
+    return text
+
+# Apply em-dash strip to every caption + first_comment before downstream use.
+# This guarantees the published output is em-dash-free regardless of model behavior.
+for p in posts:
+    for f in ("caption", "first_comment"):
+        if f in p:
+            p[f] = strip_em_dashes(p[f])
+
 # --- Stage D: images via Kie.ai (async task pattern) + package ---
 img_cfg = brand["image_gen"]
 KIE_COST_PER_IMAGE = float(img_cfg.get("cost_per_image", 0.03))  # default to GPT Image 2 1K rate

@@ -36,6 +36,10 @@ app.config["SECRET_KEY"] = os.environ["FLASK_SECRET_KEY"]
 app.config["SESSION_COOKIE_SECURE"] = True  # HTTPS only in prod
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Auto-reload templates so HTML/CSS-only deploys don't need a fb-admin restart.
+# (Python file changes still require restarting the systemd service.)
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
 
 ALLOWED_EMAILS = {
     e.strip().lower() for e in os.environ.get("ADMIN_ALLOWED_EMAILS", "").split(",") if e.strip()
