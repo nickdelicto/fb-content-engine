@@ -361,6 +361,23 @@ if brand.get("generation", {}).get("web_search_enabled"):
     ]
 
 resp = client.messages.create(**create_kwargs)
+# INSURANCE: dump the FULL response (every block: text, tool_use, tool_result) to disk
+# BEFORE we try to extract anything. If extraction fails for any reason, the actual
+# generated content stays recoverable from this file. Costs nothing (we already paid
+# Anthropic for the response); saves the batch when our extractor has bugs.
+try:
+    full_response_dump = {
+        "id": resp.id,
+        "model": resp.model,
+        "stop_reason": resp.stop_reason,
+        "usage": resp.usage.model_dump() if hasattr(resp.usage, "model_dump") else dict(resp.usage),
+        "content": [b.model_dump() if hasattr(b, "model_dump") else str(b) for b in resp.content],
+    }
+    (out_dir / "anthropic_full_response.json").write_text(json.dumps(full_response_dump, indent=2, default=str))
+except Exception as _dump_err:
+    # Don't let dump failure derail the batch — but log it
+    print(f"[warn] could not dump full response: {_dump_err}", flush=True)
+
 # Cost tracking — capture token usage from this response.
 ANTHROPIC_MODEL = create_kwargs["model"]
 a_input, a_output, a_cache_read, a_websearch, anthropic_usd = calc_anthropic_cost(ANTHROPIC_MODEL, resp)
