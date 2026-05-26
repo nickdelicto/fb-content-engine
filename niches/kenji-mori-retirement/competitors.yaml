@@ -1,54 +1,31 @@
-# v1 list: established players. After 2-3 weeks, add emerging high-velocity
-# pages surfaced by Apify rankings to a v2 list.
+# Curated to 3 personal-brand finance pages (2026-05-25 pivot).
+# Removed: corporate/media brands (AARP, NerdWallet, Penny Hoarder, Kiplinger,
+# Motley Fool, Money Talks News, Clark Howard, Boldin, Medicare Mama, IWT)
+# — lower engagement per post + less of the "personality voice" we want to mimic.
+# Also removed Dave Ramsey: too dominant — was monopolizing 15/15 top-velocity
+# slots with general/motivational content, crowding out finance-specific
+# inspirations from smaller pages we actually want to learn from.
 pages:
-  - name: Medicare Mama
-    handle: medicaremama  # CONFIRM actual FB handle
-    rank: anchor
-    notes: 1M+ followers, plainspoken expert voice. The voice model.
-  - name: Boldin
-    handle: boldin
-    rank: primary
-  - name: AARP
-    handle: aarp
-    rank: high_volume
-  - name: Ramit Sethi (I Will Teach You To Be Rich)
-    handle: IWillTeachYouToBeRich
-    rank: gen_x_modern
-    notes: Anti-Ramsey modern personal finance voice. Strong Gen X / Millennial pull. Added 2026-05-24 in audience pivot.
-  - name: NerdWallet
-    handle: NerdWallet
-    rank: utility_broad
-    notes: Broad practical finance — credit cards, mortgages, banking. Added 2026-05-24 in audience pivot.
-  - name: The Penny Hoarder
-    handle: ThePennyHoarder
-    rank: mass_appeal
-    notes: Mass-appeal middle-class money tips. Added 2026-05-24 in audience pivot.
   - name: Josh Rincon
-    handle: joshrincon
-    rank: educator
-    notes: Personal finance educator. Strong on explaining concepts in simple language. Added 2026-05-24. CONFIRM exact FB handle on first scrape.
+    handle: joshrinconofficial  # corrected from earlier 'joshrincon' which returned no posts
+    rank: anchor
+    notes: Personal finance educator with sensational packaging style — the voice model going forward.
+  - name: Good Financial Cents
+    handle: GoodFinancialCents
+    rank: primary
+    notes: Personal-brand finance page. Educational + personal voice, well-engaged.
   - name: Suze Orman
     handle: suzeorman
     rank: high_engagement
-  - name: Clark Howard
-    handle: clarkhoward
-    rank: consumer_angle
-  - name: Dave Ramsey
-    handle: daveramsey
-    rank: crossover_finance
-  - name: Kiplinger
-    handle: kiplinger
-    rank: publication
-  - name: Motley Fool
-    handle: motleyfool
-    rank: publication
-  - name: Money Talks News
-    handle: moneytalksnews
-    rank: utility
+    notes: Broad finance + money psychology. High-engagement legacy voice.
 
 scrape_settings:
   per_page_post_count: 30
   date_range_days: 14
-  rank_by: engagement_velocity
+  rank_by: engagement_velocity_per_competitor
   velocity_formula: "(likes + 2*comments + 3*shares) / max(hours_since_posted, 1)"
-  top_n_to_pass_to_prompt: 15
+  # Take top N PER competitor (not top N overall) — prevents any single high-audience
+  # page from monopolizing the source pool. Was a real bug pre-2026-05-25: Dave Ramsey
+  # took ALL 15 of the top-15-by-velocity slots, so model only ever saw his content.
+  top_n_per_competitor: 5
+  top_n_overall_cap: 25

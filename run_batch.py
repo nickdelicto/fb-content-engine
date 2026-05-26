@@ -311,9 +311,24 @@ def slim_post(p: dict) -> dict:
         "post_id": p.get("postId") or "",
     }
 
-ranked = sorted(raw_posts, key=velocity, reverse=True)
-top_posts = ranked[: competitors["scrape_settings"]["top_n_to_pass_to_prompt"]]
+# Diversified ranking: top N PER competitor (not top N overall).
+# Pre-2026-05-25 bug: ranking by velocity globally let the highest-audience page
+# monopolize all source slots (Dave Ramsey took 15/15). Per-competitor ranking
+# guarantees every page contributes its best posts to the source pool.
+posts_by_page = {}
+for p in raw_posts:
+    user_obj = p.get("user") if isinstance(p.get("user"), dict) else {}
+    page = p.get("pageName") or user_obj.get("name") or "unknown"
+    posts_by_page.setdefault(page, []).append(p)
+
+per_competitor = competitors["scrape_settings"].get("top_n_per_competitor", 5)
+overall_cap = competitors["scrape_settings"].get("top_n_overall_cap", 25)
+top_posts = []
+for page, page_posts in posts_by_page.items():
+    top_posts.extend(sorted(page_posts, key=velocity, reverse=True)[:per_competitor])
+top_posts = sorted(top_posts, key=velocity, reverse=True)[:overall_cap]
 top_posts_slim = [slim_post(p) for p in top_posts]
+print(f"[rank] {len(posts_by_page)} competitors → top {per_competitor} each → {len(top_posts)} posts to model", flush=True)
 
 # --- Stage C: generate via Anthropic ---
 print(f"[generate] {count} posts via Anthropic…", flush=True)
