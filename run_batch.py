@@ -443,31 +443,46 @@ for p in posts:
             p[f] = strip_em_dashes(p[f])
 
 # --- Stage D: images via Kie.ai (async task pattern) + package ---
+# APPEND MODE: if batch.csv already exists for this target_date (e.g., a previous
+# manual run + tonight's cron), CONTINUE the post numbering instead of overwriting.
+# Dashboard reads all rows in batch.csv and shows them — so multiple runs on the
+# same date stack into one visible list. Operator can publish all of them.
 img_cfg = brand["image_gen"]
 KIE_COST_PER_IMAGE = float(img_cfg.get("cost_per_image", 0.03))  # default to GPT Image 2 1K rate
+
+existing_csv = out_dir / "batch.csv"
+existing_count = 0
+if existing_csv.exists():
+    try:
+        existing_df = pd.read_csv(existing_csv)
+        existing_count = len(existing_df)
+        print(f"[append] batch.csv exists with {existing_count} posts — new posts will start at post_{existing_count:02d}", flush=True)
+    except Exception:
+        existing_count = 0  # fall back to write-fresh if read fails
+
 print(f"[images] generating {len(posts)} via {img_cfg['model']}…", flush=True)
 rows = []
 warnings = []
 kie_images_generated = 0
 for i, post in enumerate(posts):
+    post_num = existing_count + i  # continue numbering from existing
+    post_id = f"post_{post_num:02d}"
     img_file = ""
     try:
-        # Pass-through pattern: brand.image_gen.input is sent verbatim to Kie.
-        # Keeps run_batch.py model-agnostic — only brand.yaml needs editing when swapping image models.
         task_id = kie_create_task(
             model=img_cfg["model"],
             input_payload={"prompt": post["image_prompt"], **img_cfg.get("input", {})},
         )
         img_url = kie_poll_task(task_id)
-        img_path = out_dir / "images" / f"post_{i:02d}.png"
+        img_path = out_dir / "images" / f"{post_id}.png"
         fetch_and_save_image(img_url, img_path, strip_metadata=img_cfg.get("strip_metadata", True))
         img_file = img_path.name
         kie_images_generated += 1
     except (requests.RequestException, RuntimeError, TimeoutError, KeyError) as e:
-        warnings.append(f"post_{i:02d}: image generation failed ({e})")
+        warnings.append(f"{post_id}: image generation failed ({e})")
 
     rows.append({
-        "post_id": f"post_{i:02d}",
+        "post_id": post_id,
         "theme": post["theme"],
         "hook_type": post["hook_type"],
         "image_file": img_file,
@@ -475,12 +490,18 @@ for i, post in enumerate(posts):
         "first_comment": post["first_comment"],
     })
 
-# --- Write outputs ---
-pd.DataFrame(rows).to_csv(out_dir / "batch.csv", index=False)
-with open(out_dir / "batch.md", "w") as f:
-    f.write(f"# Posts for {target_date} (generated {generation_date.isoformat()}) — {args.niche}\n\n")
+# --- Write outputs (APPEND if existing) ---
+csv_mode = "a" if existing_count > 0 else "w"
+write_header = existing_count == 0
+pd.DataFrame(rows).to_csv(existing_csv, mode=csv_mode, header=write_header, index=False)
+
+md_mode = "a" if (out_dir / "batch.md").exists() and existing_count > 0 else "w"
+with open(out_dir / "batch.md", md_mode) as f:
+    if md_mode == "w":
+        f.write(f"# Posts for {target_date} — {args.niche}\n\n")
+    f.write(f"## Batch added {generation_date.isoformat()} ({len(rows)} post{'s' if len(rows) != 1 else ''})\n\n")
     for r in rows:
-        f.write(f"## {r['post_id']} — {r['theme']} ({r['hook_type']})\n\n")
+        f.write(f"### {r['post_id']} — {r['theme']} ({r['hook_type']})\n\n")
         if r["image_file"]:
             f.write(f"![image](images/{r['image_file']})\n\n")
         else:

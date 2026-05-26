@@ -24,9 +24,13 @@ class Post:
     recommended_time: Optional[str] = None  # e.g., "8:00 AM"
 
 
-# Recommended posting times for a 5-post day. Operator can use these as
-# rough guidance — they're spread across the day.
-RECOMMENDED_TIMES_5 = ["8:00 AM", "11:30 AM", "3:00 PM", "6:00 PM", "8:30 PM"]
+# Recommended posting times. Spread across waking hours.
+# Supports up to 10 posts/day in suggested slots; beyond that, no recommendation.
+# Operator uses these as rough guidance — actual posting time is their call.
+RECOMMENDED_TIMES_10 = [
+    "8:00 AM", "9:30 AM", "11:00 AM", "12:30 PM", "2:00 PM",
+    "3:30 PM", "5:00 PM", "6:30 PM", "8:00 PM", "9:30 PM",
+]
 
 
 def list_niches(root: pathlib.Path) -> list[str]:
@@ -56,7 +60,7 @@ def load_posts(root: pathlib.Path, niche: str, target_date: str, status_lookup: 
                 img_file = f"{post_id}.png"
             else:
                 img_file = ""
-        rec_time = RECOMMENDED_TIMES_5[i] if i < len(RECOMMENDED_TIMES_5) else None
+        rec_time = RECOMMENDED_TIMES_10[i] if i < len(RECOMMENDED_TIMES_10) else None
         status = status_lookup.get((niche, target_date, post_id), {})
         posts.append(Post(
             niche=niche,
